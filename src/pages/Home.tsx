@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, Category, Product } from '../lib/supabase';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../contexts/CartContext';
@@ -86,7 +86,7 @@ const FALLBACK_PRODUCTS: Product[] = [
   }
 ];
 
-const CategoryBlock = ({ category, products }: { category: Category, products: Product[] }) => {
+const CategoryBlock: React.FC<{ category: Category, products: Product[] }> = ({ category, products }) => {
   const { addToCart } = useCart();
   
   return (

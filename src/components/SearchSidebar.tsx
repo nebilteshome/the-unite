@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search } from 'lucide-react';
 import { supabase, Product } from '../lib/supabase';
 import { Link } from 'react-router-dom';

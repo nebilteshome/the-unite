@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -23,6 +24,7 @@ export type Product = {
   price: number;
   image_url: string;
   hover_image_url?: string;
+  images?: string[];
   created_at: string;
 }
 

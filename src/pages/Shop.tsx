@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, Product } from '../lib/supabase';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { ShoppingBag, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../contexts/CartContext';

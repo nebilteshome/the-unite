@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, Category, Product, Order } from '../lib/supabase';
-import { RefreshCw, Plus, Trash2, Edit3, Image as ImageIcon, Lock, LogOut } from 'lucide-react';
+import { RefreshCw, Plus, Trash2, Edit3, Image as ImageIcon, Lock, LogOut, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Admin() {
@@ -10,7 +10,7 @@ export default function Admin() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   
-  const { user, loading, session } = useAuth();
+  const { user, loading, session, isAdmin } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,7 +22,40 @@ export default function Admin() {
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   
   const [catForm, setCatForm] = useState({ name: '', image_url: '' });
-  const [prodForm, setProdForm] = useState({ name: '', description: '', price: '', image_url: '', category_id: '' });
+  const [prodForm, setProdForm] = useState({ name: '', description: '', price: '', image_url: '', category_id: '', images: [] as string[] });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isCategory = false) => {
+    const file = e.target.files?.[0];
+    if (!file || !supabase) return;
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const filePath = `uploads/${fileName}`;
+
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('products')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('products')
+        .getPublicUrl(filePath);
+
+      if (isCategory) {
+        setCatForm({ ...catForm, image_url: publicUrl });
+      } else {
+        setProdForm(prev => ({ 
+          ...prev, 
+          image_url: prev.image_url || publicUrl,
+          images: [...prev.images, publicUrl] 
+        }));
+      }
+    } catch (error: any) {
+      alert("Error uploading image: " + error.message);
+    }
+  };
 
   const fetchAll = async () => {
     if (!supabase) return;
@@ -89,9 +122,10 @@ export default function Admin() {
       name: prodForm.name,
       description: prodForm.description,
       price: parseFloat(prodForm.price || '0'),
-      image_url: prodForm.image_url
+      image_url: prodForm.image_url,
+      images: prodForm.images
     });
-    setProdForm({ name: '', description: '', price: '', image_url: '', category_id: '' });
+    setProdForm({ name: '', description: '', price: '', image_url: '', category_id: '', images: [] });
     setShowProductForm(false);
     fetchAll();
   };
@@ -259,7 +293,11 @@ export default function Admin() {
                   <h3 className="font-bold text-sm uppercase mb-4">New Category</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input type="text" placeholder="Category Name" value={catForm.name} onChange={e => setCatForm({...catForm, name: e.target.value})} className="border border-[#e5e5e5] p-3 text-sm focus:border-black outline-none" required />
-                    <input type="url" placeholder="Image URL (Full Screen Hero)" value={catForm.image_url} onChange={e => setCatForm({...catForm, image_url: e.target.value})} className="border border-[#e5e5e5] p-3 text-sm focus:border-black outline-none" required />
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Category Hero Image</label>
+                      <input type="url" placeholder="Image URL" value={catForm.image_url} onChange={e => setCatForm({...catForm, image_url: e.target.value})} className="w-full border border-[#e5e5e5] p-3 text-sm focus:border-black outline-none mb-2" required />
+                      <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, true)} className="text-xs" />
+                    </div>
                   </div>
                   <div className="mt-4 flex gap-2">
                     <button type="submit" className="bg-black text-white px-6 py-3 text-[10px] uppercase font-bold tracking-widest hover:bg-gray-800">Save Category</button>
@@ -315,7 +353,42 @@ export default function Admin() {
                     <input type="text" placeholder="Product Name" value={prodForm.name} onChange={e => setProdForm({...prodForm, name: e.target.value})} className="border border-[#e5e5e5] p-3 text-sm focus:border-black outline-none" required />
                     <input type="text" placeholder="Description/Variants (e.g. Jet Black 5 Colours)" value={prodForm.description} onChange={e => setProdForm({...prodForm, description: e.target.value})} className="border border-[#e5e5e5] p-3 text-sm focus:border-black outline-none" required />
                     <input type="number" step="0.01" placeholder="Price" value={prodForm.price} onChange={e => setProdForm({...prodForm, price: e.target.value})} className="border border-[#e5e5e5] p-3 text-sm focus:border-black outline-none" required />
-                    <input type="url" placeholder="Product Image URL" value={prodForm.image_url} onChange={e => setProdForm({...prodForm, image_url: e.target.value})} className="border border-[#e5e5e5] p-3 text-sm focus:border-black outline-none" required />
+                    <div className="md:col-span-2">
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Product Images (First one is main)</label>
+                      <div className="flex flex-wrap gap-4 mb-4">
+                        {prodForm.images.map((img, i) => (
+                          <div key={i} className="relative w-20 h-24 bg-white border border-[#e5e5e5]">
+                            <img src={img} className="w-full h-full object-contain" />
+                            <button 
+                              type="button"
+                              onClick={() => setProdForm(prev => ({ ...prev, images: prev.images.filter((_, idx) => idx !== i) }))}
+                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                        <label className="w-20 h-24 border-2 border-dashed border-[#e5e5e5] flex flex-col items-center justify-center cursor-pointer hover:border-black transition-colors">
+                          <Plus className="w-6 h-6 opacity-20" />
+                          <span className="text-[8px] uppercase font-bold mt-1 opacity-40">Add</span>
+                          <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e)} className="hidden" />
+                        </label>
+                      </div>
+                      <input type="url" placeholder="Add Image URL instead" className="w-full border border-[#e5e5e5] p-3 text-sm focus:border-black outline-none" onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = (e.target as HTMLInputElement).value;
+                          if (val) {
+                            setProdForm(prev => ({ 
+                              ...prev, 
+                              image_url: prev.image_url || val,
+                              images: [...prev.images, val] 
+                            }));
+                            (e.target as HTMLInputElement).value = '';
+                          }
+                        }
+                      }} />
+                    </div>
                   </div>
                   <div className="mt-4 flex gap-2">
                     <button type="submit" className="bg-black text-white px-6 py-3 text-[10px] uppercase font-bold tracking-widest hover:bg-gray-800">Save Product</button>
