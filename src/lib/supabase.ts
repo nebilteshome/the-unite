@@ -12,6 +12,7 @@ export type Category = {
   id: string;
   name: string;
   image_url: string;
+  video_url?: string;
   order_index: number;
   created_at: string;
 }

@@ -21,10 +21,10 @@ export default function Admin() {
   const [showProductForm, setShowProductForm] = useState(false);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   
-  const [catForm, setCatForm] = useState({ name: '', image_url: '' });
+  const [catForm, setCatForm] = useState({ name: '', image_url: '', video_url: '' });
   const [prodForm, setProdForm] = useState({ name: '', description: '', price: '', image_url: '', category_id: '', images: [] as string[] });
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isCategory = false) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'category_image' | 'category_video' | 'product_image') => {
     const file = e.target.files?.[0];
     if (!file || !supabase) return;
 
@@ -43,8 +43,10 @@ export default function Admin() {
         .from('products')
         .getPublicUrl(filePath);
 
-      if (isCategory) {
+      if (type === 'category_image') {
         setCatForm({ ...catForm, image_url: publicUrl });
+      } else if (type === 'category_video') {
+        setCatForm({ ...catForm, video_url: publicUrl });
       } else {
         setProdForm(prev => ({ 
           ...prev, 
@@ -53,7 +55,7 @@ export default function Admin() {
         }));
       }
     } catch (error: any) {
-      alert("Error uploading image: " + error.message);
+      alert("Error uploading file: " + error.message);
     }
   };
 
@@ -106,9 +108,10 @@ export default function Admin() {
     await supabase.from('categories').insert({
       name: catForm.name,
       image_url: catForm.image_url,
+      video_url: catForm.video_url,
       order_index: categories.length
     });
-    setCatForm({ name: '', image_url: '' });
+    setCatForm({ name: '', image_url: '', video_url: '' });
     setShowCategoryForm(false);
     fetchAll();
   };
@@ -296,7 +299,12 @@ export default function Admin() {
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Category Hero Image</label>
                       <input type="url" placeholder="Image URL" value={catForm.image_url} onChange={e => setCatForm({...catForm, image_url: e.target.value})} className="w-full border border-[#e5e5e5] p-3 text-sm focus:border-black outline-none mb-2" required />
-                      <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, true)} className="text-xs" />
+                      <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, 'category_image')} className="text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Category Hero Video (Optional)</label>
+                      <input type="url" placeholder="Video URL" value={catForm.video_url} onChange={e => setCatForm({...catForm, video_url: e.target.value})} className="w-full border border-[#e5e5e5] p-3 text-sm focus:border-black outline-none mb-2" />
+                      <input type="file" accept="video/*" onChange={(e) => handleFileUpload(e, 'category_video')} className="text-xs" />
                     </div>
                   </div>
                   <div className="mt-4 flex gap-2">
@@ -371,7 +379,7 @@ export default function Admin() {
                         <label className="w-20 h-24 border-2 border-dashed border-[#e5e5e5] flex flex-col items-center justify-center cursor-pointer hover:border-black transition-colors">
                           <Plus className="w-6 h-6 opacity-20" />
                           <span className="text-[8px] uppercase font-bold mt-1 opacity-40">Add</span>
-                          <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e)} className="hidden" />
+                          <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, 'product_image')} className="hidden" />
                         </label>
                       </div>
                       <input type="url" placeholder="Add Image URL instead" className="w-full border border-[#e5e5e5] p-3 text-sm focus:border-black outline-none" onKeyDown={(e) => {

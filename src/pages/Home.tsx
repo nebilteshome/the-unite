@@ -93,11 +93,22 @@ const CategoryBlock: React.FC<{ category: Category, products: Product[] }> = ({ 
     <div className="flex flex-col bg-brand-bg relative z-10 w-full mb-0 border-b-8 border-brand-bg">
       {/* Hero Section */}
       <div className="relative h-screen w-full flex items-center justify-center bg-black">
-        <img 
-          src={category.image_url} 
-          alt={category.name}
-          className="absolute inset-0 w-full h-full object-cover opacity-80"
-        />
+        {category.video_url ? (
+          <video 
+            src={category.video_url} 
+            autoPlay 
+            muted 
+            loop 
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover opacity-80"
+          />
+        ) : (
+          <img 
+            src={category.image_url} 
+            alt={category.name}
+            className="absolute inset-0 w-full h-full object-cover opacity-80"
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
         
         <div className="relative z-10 flex flex-col items-center mt-auto pb-24 px-4 w-full">
