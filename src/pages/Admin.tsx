@@ -38,6 +38,11 @@ export default function Admin() {
     const files = e.target.files;
     if (!files || files.length === 0 || !supabase) return;
 
+    // Debug logging
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log("Current Supabase User:", user);
+    console.log("Is Admin state:", isAdmin);
+
     if (type === 'gallery_batch') {
       setUploadProgress({ current: 0, total: files.length });
       const itemsToInsert = [];
