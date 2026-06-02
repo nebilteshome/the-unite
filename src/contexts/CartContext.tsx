@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import posthog from 'posthog-js';
 import { useAuth } from './AuthContext';
 import { supabase, Product } from '../lib/supabase';
 
@@ -80,6 +81,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [items, user]);
 
   const addToCart = (product: Product, size?: string) => {
+    posthog.capture('add_to_cart', {
+      product_id: product.id,
+      product_name: product.name,
+      price: product.price,
+      size: size
+    });
     setItems(prev => {
       const existing = prev.find(i => i.product.id === product.id && i.size === size);
       if (existing) {

@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Menu, X, Bell, Bookmark, Search, User, ShoppingBag, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { UserButton, SignedIn, SignedOut, SignInButton } from '@clerk/clerk-react';
 import { cn } from '../lib/utils';
 import AccountSidebar from './AccountSidebar';
 import CartSidebar from './CartSidebar';
 import SearchSidebar from './SearchSidebar';
+import FavoritesSidebar from './FavoritesSidebar';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { usePersonalization } from '../contexts/PersonalizationContext';
 
 export default function Layout() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -15,9 +18,12 @@ export default function Layout() {
   const [isPastHero, setIsPastHero] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [favOpen, setFavOpen] = useState(false);
   const location = useLocation();
   const { items, isCartOpen, openCart, closeCart } = useCart();
   const { user } = useAuth();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, currency, setCurrency, favorites } = usePersonalization();
   const cartItemCount = items.reduce((sum, i) => sum + i.quantity, 0);
 
   const isHome = location.pathname === '/';
@@ -32,14 +38,14 @@ export default function Layout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-brand-bg relative flex flex-col font-sans">
+    <div className="min-h-screen bg-brand-bg relative flex flex-col font-sans pb-[env(safe-area-inset-bottom)]">
       <header
         className={cn(
-          "fixed top-0 w-full z-50 transition-all duration-300 pointer-events-none",
+          "fixed top-0 w-full z-50 transition-all duration-300 pointer-events-none pt-[env(safe-area-inset-top)]",
           !mobileMenuOpen ? "mix-blend-difference text-white" : "bg-brand-bg text-brand-ink"
         )}
       >
-        <div className="w-full px-6 flex items-center justify-between py-4 pointer-events-auto">
+        <div className="w-full px-4 md:px-6 flex items-center justify-between py-4 pointer-events-auto">
           
           {/* Left Nav */}
           <nav className="hidden md:flex items-center gap-8 w-1/3">
@@ -88,29 +94,108 @@ export default function Layout() {
               <Link to="/" className="text-[9px] font-bold hover:opacity-70 transition-opacity">Retail</Link>
               <Link to="/gallery" className="text-[9px] font-bold hover:opacity-70 transition-opacity">The Vault</Link>
               <Link to="/" className="text-[9px] font-bold hover:opacity-70 transition-opacity">Prestige</Link>
-              <button className="text-[9px] font-bold hover:opacity-70 transition-opacity">UG / USD</button>
+              <select 
+                value={currency.code} 
+                onChange={(e) => setCurrency(e.target.value)}
+                className="bg-transparent text-[9px] font-bold outline-none border-none cursor-pointer uppercase tracking-widest"
+              >
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+                <option value="UGX">UGX (USh)</option>
+              </select>
             </nav>
 
             <div className="flex items-center gap-3">
-              {user && (
-                <>
-                  <button className="relative hover:opacity-70 transition-opacity hidden md:block">
-                    <Bell className="w-3.5 h-3.5 stroke-[2]" />
-                    <span className="absolute -top-1 -right-1.5 bg-brand-light text-brand-ink text-[7px] font-bold w-2.5 h-2.5 rounded-full flex items-center justify-center">
-                      4
-                    </span>
-                  </button>
-                  <button className="hover:opacity-70 transition-opacity hidden md:block">
+              {import.meta.env.VITE_CLERK_PUBLISHABLE_KEY && (
+                <SignedIn>
+                  <div className="relative">
+                    <button 
+                      onClick={() => setNotifOpen(!notifOpen)}
+                      className="relative hover:opacity-70 transition-opacity hidden md:block"
+                    >
+                      <Bell className="w-3.5 h-3.5 stroke-[2]" />
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1.5 bg-brand-light text-brand-ink text-[7px] font-bold w-2.5 h-2.5 rounded-full flex items-center justify-center animate-pulse">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </button>
+                    
+                    <AnimatePresence>
+                      {notifOpen && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                          className="absolute right-0 mt-4 w-80 bg-white border border-[#e5e5e5] shadow-xl p-4 text-brand-ink overflow-hidden"
+                        >
+                          <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#f4f4f4]">
+                            <h3 className="text-[10px] font-bold uppercase tracking-widest">Notifications</h3>
+                            <button onClick={() => markAllAsRead()} className="text-[8px] font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity">Mark all read</button>
+                          </div>
+                          
+                          <div className="max-h-64 overflow-y-auto hide-scrollbar space-y-3">
+                            {notifications.length === 0 ? (
+                              <p className="text-[10px] opacity-40 py-4 text-center">No notifications yet</p>
+                            ) : (
+                              notifications.map(n => (
+                                <div 
+                                  key={n.id} 
+                                  onClick={() => markAsRead(n.id)}
+                                  className={cn(
+                                    "p-3 rounded-sm transition-colors cursor-pointer",
+                                    n.is_read ? "bg-transparent opacity-60" : "bg-[#f4f4f4]"
+                                  )}
+                                >
+                                  <p className="text-[10px] font-bold uppercase mb-1">{n.title}</p>
+                                  <p className="text-[10px] leading-relaxed mb-1">{n.message}</p>
+                                  <p className="text-[8px] opacity-40 uppercase">{new Date(n.created_at).toLocaleDateString()}</p>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  <button onClick={() => setFavOpen(true)} className="relative hover:opacity-70 transition-opacity hidden md:block">
                     <Bookmark className="w-3.5 h-3.5 stroke-[2]" />
+                    {favorites.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold w-2.5 h-2.5 rounded-full flex items-center justify-center">
+                        {favorites.length}
+                      </span>
+                    )}
                   </button>
-                </>
+                </SignedIn>
               )}
+
               <button onClick={() => setSearchOpen(true)} className="hover:opacity-70 transition-opacity">
                 <Search className="w-3.5 h-3.5 stroke-[2]" />
               </button>
+
               <button className="hover:opacity-70 transition-opacity hidden md:block" onClick={() => setAccountOpen(true)}>
                  <User className="w-3.5 h-3.5 stroke-[2]" />
               </button>
+
+              {import.meta.env.VITE_CLERK_PUBLISHABLE_KEY && (
+                <SignedIn>
+                  <div className="hidden md:block scale-90 -mr-2">
+                    <UserButton afterSignOutUrl="/" />
+                  </div>
+                </SignedIn>
+              )}
+
+              {import.meta.env.VITE_CLERK_PUBLISHABLE_KEY && (
+                <SignedOut>
+                  <SignInButton mode="modal">
+                    <button className="text-[9px] font-bold uppercase tracking-widest bg-transparent border border-current px-4 py-2 hover:bg-white hover:text-black transition-all hidden md:block">
+                      Sign In
+                    </button>
+                  </SignInButton>
+                </SignedOut>
+              )}
+
               <button onClick={openCart} className="relative hover:opacity-70 transition-opacity">
                  <ShoppingBag className="w-3.5 h-3.5 stroke-[2]" />
                  {cartItemCount > 0 && (
@@ -132,24 +217,74 @@ export default function Layout() {
         </div>
       </header>
 
-      {/* Mobile Menu Overlay */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-0 z-40 bg-brand-bg flex flex-col pt-24 pb-8"
+            className="fixed inset-0 z-40 bg-brand-bg flex flex-col pt-24 pb-8 overflow-y-auto"
           >
-            <nav className="flex flex-col gap-6 w-full px-6 font-bold text-sm tracking-widest uppercase text-brand-ink">
+            <nav className="flex flex-col gap-6 w-full px-6 font-bold text-sm tracking-widest uppercase text-brand-ink mb-12">
               <Link to="/shop" onClick={() => setMobileMenuOpen(false)}>Shop</Link>
               <Link to="/collections" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">247 <Zap className="w-4 h-4 fill-current" /></Link>
               <Link to="/" onClick={() => setMobileMenuOpen(false)}>Retail</Link>
               <Link to="/gallery" onClick={() => setMobileMenuOpen(false)}>The Vault</Link>
               <Link to="/" onClick={() => setMobileMenuOpen(false)}>Prestige</Link>
-              <div className="h-px bg-brand-ink/10 my-2" />
-              <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="opacity-60 text-xs">Admin</Link>
             </nav>
+
+            <div className="mt-auto px-6 space-y-8">
+              <div className="flex flex-col gap-4">
+                <button 
+                  onClick={() => { setFavOpen(true); setMobileMenuOpen(false); }}
+                  className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest border-b border-brand-ink/10 pb-4"
+                >
+                  <span>Wishlist</span>
+                  <span className="opacity-40">{favorites.length} Items</span>
+                </button>
+                <div className="flex items-center justify-between border-b border-brand-ink/10 pb-4">
+                  <button 
+                    onClick={() => { setAccountOpen(true); setMobileMenuOpen(false); }}
+                    className="text-[10px] font-bold uppercase tracking-widest"
+                  >
+                    <span>Account</span>
+                  </button>
+                  <div className="flex items-center gap-4">
+                    {import.meta.env.VITE_CLERK_PUBLISHABLE_KEY && (
+                      <SignedIn>
+                        <div className="scale-90">
+                          <UserButton afterSignOutUrl="/" />
+                        </div>
+                      </SignedIn>
+                    )}
+                    {import.meta.env.VITE_CLERK_PUBLISHABLE_KEY && (
+                      <SignedOut>
+                        <SignInButton mode="modal">
+                          <button className="text-[10px] font-bold uppercase tracking-widest bg-transparent border border-brand-ink/20 px-4 py-2 hover:border-brand-ink transition-all">
+                            Sign In
+                          </button>
+                        </SignInButton>
+                      </SignedOut>
+                    )}
+                    <User className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <select 
+                  value={currency.code} 
+                  onChange={(e) => setCurrency(e.target.value)}
+                  className="bg-transparent text-[10px] font-bold outline-none border-none cursor-pointer uppercase tracking-widest"
+                >
+                  <option value="USD">USD ($)</option>
+                  <option value="EUR">EUR (€)</option>
+                  <option value="GBP">GBP (£)</option>
+                  <option value="UGX">UGX (USh)</option>
+                </select>
+                <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="opacity-40 text-[9px] font-bold uppercase tracking-widest">Admin</Link>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -197,6 +332,8 @@ export default function Layout() {
       <CartSidebar isOpen={isCartOpen} onClose={closeCart} />
       {/* Search Sidebar */}
       <SearchSidebar isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+      {/* Favorites Sidebar */}
+      <FavoritesSidebar isOpen={favOpen} onClose={() => setFavOpen(false)} />
     </div>
   );
 }

@@ -1,9 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { supabase, Category, Product } from '../lib/supabase';
-import { motion } from 'framer-motion';
-import { Plus } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { supabase, Category, Product, Drop } from '../lib/supabase';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Heart, Clock, ShoppingCart } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import posthog from 'posthog-js';
+import confetti from 'canvas-confetti';
 import { useCart } from '../contexts/CartContext';
+import { usePersonalization } from '../contexts/PersonalizationContext';
+import { cn } from '../lib/utils';
 
 // Updated Fallback Data to match brand style
 const FALLBACK_CATEGORIES: Category[] = [
@@ -86,8 +90,166 @@ const FALLBACK_PRODUCTS: Product[] = [
   }
 ];
 
+const CountdownTimer: React.FC<{ targetDate: string, onComplete?: () => void }> = ({ targetDate, onComplete }) => {
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date().getTime();
+      const distance = new Date(targetDate).getTime() - now;
+
+      if (distance <= 0) {
+        clearInterval(timer);
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        if (onComplete) onComplete();
+        return;
+      }
+
+      setTimeLeft({
+        days: Math.floor(distance / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((distance % (1000 * 60)) / 1000)
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [targetDate, onComplete]);
+
+  return (
+    <div className="flex gap-4 md:gap-8 mt-8">
+      {[
+        { label: 'Days', value: timeLeft.days },
+        { label: 'Hours', value: timeLeft.hours },
+        { label: 'Mins', value: timeLeft.minutes },
+        { label: 'Secs', value: timeLeft.seconds }
+      ].map((item, i) => (
+        <motion.div 
+          key={i} 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.1 }}
+          className="flex flex-col items-center"
+        >
+          <span className="text-2xl md:text-5xl font-extrabold tracking-tighter text-white tabular-nums">
+            {String(item.value).padStart(2, '0')}
+          </span>
+          <span className="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-white/40 mt-2">
+            {item.label}
+          </span>
+        </motion.div>
+      ))}
+    </div>
+  );
+};
+
+const DropHero: React.FC<{ drop: Drop }> = ({ drop }) => {
+  const [isLive, setIsLive] = useState(false);
+
+  const triggerCelebration = useCallback(() => {
+    setIsLive(true);
+    
+    // Fireworks effect
+    const duration = 5 * 1000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+    const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+    const interval: any = setInterval(function() {
+      const timeLeft = animationEnd - Date.now();
+
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+
+      const particleCount = 50 * (timeLeft / duration);
+      // since particles fall down, start a bit higher than random
+      confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+      confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+    }, 250);
+  }, []);
+
+  // Check if already live on mount
+  useEffect(() => {
+    if (new Date(drop.release_date).getTime() <= new Date().getTime()) {
+      setIsLive(true);
+    }
+  }, [drop.release_date]);
+
+  return (
+    <div className="relative h-screen w-full flex items-center justify-center bg-black overflow-hidden">
+      {drop.video_url ? (
+        <video src={drop.video_url} autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover opacity-70" />
+      ) : (
+        <img src={drop.image_url} alt={drop.title} className="absolute inset-0 w-full h-full object-cover opacity-70" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/60" />
+      
+      <div className="relative z-10 flex flex-col items-center px-4 text-center">
+        <motion.span 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={cn(
+            "text-[10px] md:text-[12px] font-bold uppercase tracking-[0.3em] mb-6 transition-colors duration-500",
+            isLive ? "text-green-400" : "text-white animate-pulse"
+          )}
+        >
+          {isLive ? '• Now Available' : 'Upcoming Drop'}
+        </motion.span>
+        
+        <motion.h1 
+          layout
+          className="text-4xl md:text-7xl lg:text-8xl text-white font-extrabold tracking-tighter uppercase leading-none max-w-5xl"
+        >
+          {drop.title}
+        </motion.h1>
+
+        <AnimatePresence mode="wait">
+          {!isLive ? (
+            <motion.div
+              key="timer"
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0, scale: 0.8, filter: 'blur(10px)' }}
+              transition={{ duration: 0.8 }}
+            >
+              <CountdownTimer targetDate={drop.release_date} onComplete={triggerCelebration} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="live-action"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+              className="mt-12"
+            >
+              <Link to="/shop" className="bg-transparent border border-white text-white px-16 py-5 font-bold text-[12px] uppercase tracking-[0.2em] hover:bg-white hover:text-black transition-all shadow-[0_0_50px_rgba(255,255,255,0.1)] flex items-center gap-3 group">
+                <ShoppingCart className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                Shop Now
+              </Link>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {!isLive && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-12"
+          >
+            <button className="bg-transparent border border-white/30 backdrop-blur-md text-white px-12 py-4 font-bold text-[11px] uppercase tracking-widest hover:bg-white hover:text-black transition-all">
+              Join Waitlist
+            </button>
+          </motion.div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const CategoryBlock: React.FC<{ category: Category, products: Product[] }> = ({ category, products }) => {
   const { addToCart } = useCart();
+  const { isFavorite, toggleFavorite, formatPrice } = usePersonalization();
   
   return (
     <div className="flex flex-col bg-brand-bg relative z-10 w-full mb-0 border-b-8 border-brand-bg">
@@ -116,11 +278,8 @@ const CategoryBlock: React.FC<{ category: Category, products: Product[] }> = ({ 
             {category.name}
           </h2>
           <div className="flex flex-col sm:flex-row gap-3">
-             <Link to="/shop" className="bg-white/20 backdrop-blur-md border border-white/30 text-white px-8 py-2.5 font-bold text-[11px] uppercase tracking-widest hover:bg-white hover:text-black transition-colors w-full sm:w-auto text-center">
-               Shop Mens
-             </Link>
-             <Link to="/shop" className="bg-white/20 backdrop-blur-md border border-white/30 text-white px-8 py-2.5 font-bold text-[11px] uppercase tracking-widest hover:bg-white hover:text-black transition-colors w-full sm:w-auto text-center">
-               Shop Womens
+             <Link to={`/shop#${category.id}`} className="bg-transparent border border-white text-white px-12 py-3.5 font-bold text-[11px] uppercase tracking-widest hover:bg-white hover:text-black transition-colors w-full sm:w-auto text-center">
+               Shop
              </Link>
           </div>
         </div>
@@ -135,38 +294,49 @@ const CategoryBlock: React.FC<{ category: Category, products: Product[] }> = ({ 
                 className="group flex-shrink-0 snap-start border-r border-[#e5e5e5] p-5 pb-6 relative w-[240px] sm:w-[280px] md:w-[320px] lg:w-[360px] cursor-pointer"
              >
                 <div className="aspect-[4/5] relative mb-4 flex items-center justify-center p-3 bg-[#f4f4f4]">
+                   {/* Favorite Button */}
+                   <button 
+                     onClick={(e) => {
+                       e.preventDefault();
+                       toggleFavorite(p.id);
+                     }}
+                     className="absolute top-4 right-4 z-20 hover:scale-110 transition-transform"
+                   >
+                     <Heart 
+                       className={cn(
+                         "w-5 h-5",
+                         isFavorite(p.id) ? "fill-red-500 stroke-red-500" : "stroke-gray-400"
+                       )} 
+                     />
+                   </button>
+                   
                    {/* We simulate cropped clothes by setting mix-blend-multiply on white background images to drop out white */}
                    {/* Primary image */}
                    <img 
                      src={p.image_url} 
                      alt={p.name} 
-                     className="w-full h-full object-contain mix-blend-multiply absolute inset-0 opacity-100 group-hover:opacity-0" 
+                     className="w-full h-full object-contain mix-blend-multiply absolute inset-0 opacity-100 group-hover:opacity-0 transition-opacity duration-0" 
                    />
                    {/* Hover image */}
                    <img 
                      src={p.hover_image_url || p.image_url} 
                      alt={p.name} 
-                     className="w-full h-full object-contain mix-blend-multiply absolute inset-0 opacity-0 group-hover:opacity-100" 
+                     className="w-full h-full object-contain mix-blend-multiply absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-0" 
                    />
-                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 z-10 p-6">
-                     <button 
-                       onClick={(e) => {
-                         e.preventDefault();
-                         addToCart(p);
-                       }}
-                       className="bg-black text-white w-full py-4 text-xs font-semibold uppercase tracking-widest hover:bg-gray-800 transition-colors"
-                     >
-                       Quick Add
-                     </button>
-                   </div>
-                   <button className="absolute bottom-4 right-4 text-gray-500 hover:text-black transition-colors z-0">
+                   <button 
+                     onClick={(e) => {
+                       e.preventDefault();
+                       addToCart(p);
+                     }}
+                     className="absolute bottom-4 right-4 text-gray-400 hover:text-black transition-colors z-20"
+                   >
                      <Plus className="w-6 h-6 font-light stroke-[1.5]" />
                    </button>
                 </div>
                 <div className="flex flex-col">
                    <div className="flex justify-between items-start mb-1">
                       <h3 className="font-semibold text-sm leading-snug text-brand-ink group-hover:underline pr-4">{p.name}</h3>
-                      <span className="font-semibold text-sm tabular-nums">${p.price}</span>
+                      <span className="font-semibold text-sm tabular-nums">{formatPrice(p.price)}</span>
                    </div>
                    <p className="text-[11px] text-gray-500 font-semibold uppercase">{p.description}</p>
                 </div>
@@ -181,7 +351,7 @@ const CategoryBlock: React.FC<{ category: Category, products: Product[] }> = ({ 
 
       {/* Shop All Button Block */}
       <div className="flex justify-center py-16 bg-[#f4f4f4] border-t border-[#e5e5e5]">
-         <Link to="/shop" className="bg-black text-white px-8 py-3.5 font-bold text-[11px] uppercase tracking-widest hover:opacity-80 transition-opacity whitespace-nowrap">
+         <Link to={`/shop#${category.id}`} className="bg-transparent border border-black text-black px-12 py-3.5 font-bold text-[11px] uppercase tracking-widest hover:bg-black hover:text-white transition-all whitespace-nowrap">
            Shop All {category.name}
          </Link>
       </div>
@@ -192,6 +362,7 @@ const CategoryBlock: React.FC<{ category: Category, products: Product[] }> = ({ 
 export default function Home() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [drops, setDrops] = useState<Drop[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -204,16 +375,22 @@ export default function Home() {
       }
 
       try {
-        const [{ data: cats, error: catError }, { data: prods, error: prodError }] = await Promise.all([
-          supabase.from('categories').select('*').order('order_index', { ascending: true }),
-          supabase.from('products').select('*')
+        const [
+          { data: cats, error: catError }, 
+          { data: prods, error: prodError },
+          { data: dropData, error: dropError }
+        ] = await Promise.all([
+          supabase.from('categories').select('*').order('created_at', { ascending: false }),
+          supabase.from('products').select('*'),
+          supabase.from('drops').select('*').eq('is_active', true).order('release_date', { ascending: true })
         ]);
         
-        if (catError || prodError) throw catError || prodError;
+        if (catError || prodError || dropError) throw catError || prodError || dropError;
 
         if (cats && cats.length > 0) {
           setCategories(cats);
           setProducts(prods || []);
+          setDrops(dropData || []);
         } else {
           setCategories(FALLBACK_CATEGORIES);
           setProducts(FALLBACK_PRODUCTS);
@@ -232,6 +409,12 @@ export default function Home() {
     loadData();
   }, []);
 
+  const activeDrop = useMemo(() => {
+    if (drops.length === 0) return null;
+    // Return first upcoming drop
+    return drops[0];
+  }, [drops]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-brand-bg flex items-center justify-center">
@@ -242,6 +425,9 @@ export default function Home() {
 
   return (
     <div className="flex flex-col bg-brand-bg w-full">
+      {/* Show active drop if exists */}
+      {activeDrop && <DropHero drop={activeDrop} />}
+
       {categories.map((category) => (
         <CategoryBlock 
           key={category.id} 

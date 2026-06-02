@@ -1,63 +1,118 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Session, User } from '@supabase/supabase-js';
+import { useUser, useSession, useClerk } from '@clerk/clerk-react';
 import { supabase } from '../lib/supabase';
 
 type AuthContextType = {
-  session: Session | null;
-  user: User | null;
+  user: any;
   loading: boolean;
   isAdmin: boolean;
+  clerkUser: any;
+  signOut: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextType>({ session: null, user: null, loading: true, isAdmin: false });
+const AuthContext = createContext<AuthContextType>({ 
+  user: null, 
+  loading: true, 
+  isAdmin: false, 
+  clerkUser: null,
+  signOut: async () => {} 
+});
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  let clerkUser: any = null;
+  let clerkSession: any = null;
+  let clerkSignOut: any = async () => {};
+  let isLoaded = true;
+
+  try {
+    const userContext = useUser();
+    const sessionContext = useSession();
+    const clerkContext = useClerk();
+    
+    clerkUser = userContext.user;
+    isLoaded = userContext.isLoaded;
+    clerkSession = sessionContext.session;
+    clerkSignOut = clerkContext.signOut;
+  } catch (e) {
+    // Clerk not initialized or Provider missing
+    console.warn("Clerk hooks failed. Operating in guest mode.");
+  }
+  
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    if (!supabase) {
-      setLoading(false);
-      return;
-    }
+    const syncWithSupabase = async () => {
+      if (!isLoaded) return;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      checkAdminStatus(session?.user);
-      setLoading(false);
-    });
+      if (!clerkUser) {
+        setUser(null);
+        setIsAdmin(false);
+        setLoading(false);
+        return;
+      }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      checkAdminStatus(session?.user);
-      setLoading(false);
-    });
+      const email = clerkUser.primaryEmailAddress?.emailAddress;
+      const isAuthorizedAdmin = email === 'fffg3839@gmail.com';
+      setIsAdmin(isAuthorizedAdmin);
 
-    return () => subscription.unsubscribe();
-  }, []);
+      try {
+        // Trigger Sync API to link Clerk with Supabase
+        await fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            clerkId: clerkUser.id, 
+            email: email 
+          })
+        });
 
-  const checkAdminStatus = async (user: User | null | undefined) => {
-    if (!user || !supabase) {
-      setIsAdmin(false);
-      return;
-    }
-    // Simplistic admin check: normally you'd check a role in a profiles table or custom claims.
-    // Here we check if the user exists in an "admins" table or just allow any logged in for the sake of the demo, 
-    // but the user requested robust auth. Let's check a "profiles" table for role === 'admin'.
-    try {
-      const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-      setIsAdmin(data?.role === 'admin');
-    } catch (err) {
-      setIsAdmin(false);
-    }
+        // 1. Get a Supabase-compatible JWT from Clerk
+        const token = await clerkSession?.getToken({ template: 'supabase' });
+
+        if (token && supabase) {
+          await supabase.auth.setSession({
+            access_token: token,
+            refresh_token: '',
+          });
+
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .single();
+
+          const authUser = {
+            ...clerkUser,
+            email: email,
+          };
+
+          if (profile) {
+            setUser({ ...authUser, ...profile });
+          } else {
+            setUser(authUser);
+          }
+        } else {
+          setUser(clerkUser);
+        }
+      } catch (err) {
+        console.error("Error syncing with Supabase:", err);
+        setUser(clerkUser);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    syncWithSupabase();
+  }, [isLoaded, clerkUser, clerkSession]);
+
+  const signOut = async () => {
+    await clerkSignOut();
+    if (supabase) await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, isAdmin }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin, clerkUser, signOut }}>
       {children}
     </AuthContext.Provider>
   );

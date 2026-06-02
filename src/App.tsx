@@ -1,7 +1,11 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { ClerkProvider } from '@clerk/clerk-react';
+import { PayPalScriptProvider } from "@paypal/react-paypal-js";
+import posthog from 'posthog-js';
 import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
+import { PersonalizationProvider } from './contexts/PersonalizationContext';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Shop from './pages/Shop';
@@ -9,22 +13,63 @@ import Collections from './pages/Collections';
 import Gallery from './pages/Gallery';
 import Admin from './pages/Admin';
 
+const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID;
+
+if (!CLERK_PUBLISHABLE_KEY) {
+  console.warn("Missing Clerk Publishable Key. Authentication will not work.");
+}
+
+function PostHogPageView() {
+  const location = useLocation();
+  useEffect(() => {
+    posthog.capture('$pageview');
+  }, [location]);
+  return null;
+}
+
 export default function App() {
+  if (!CLERK_PUBLISHABLE_KEY) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-brand-bg p-6 text-center">
+        <div className="max-w-md">
+          <h1 className="text-2xl font-extrabold uppercase tracking-tighter mb-4">Setup Required</h1>
+          <p className="text-sm opacity-70 mb-6">
+            Please add your <code className="bg-black/5 px-1 rounded">VITE_CLERK_PUBLISHABLE_KEY</code> to your <code className="bg-black/5 px-1 rounded">.env.local</code> file to continue.
+          </p>
+          <div className="animate-pulse flex justify-center">
+            <div className="w-2 h-2 bg-black rounded-full mx-1"></div>
+            <div className="w-2 h-2 bg-black rounded-full mx-1"></div>
+            <div className="w-2 h-2 bg-black rounded-full mx-1"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <AuthProvider>
-      <CartProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Home />} />
-              <Route path="shop" element={<Shop />} />
-              <Route path="collections" element={<Collections />} />
-              <Route path="gallery" element={<Gallery />} />
-              <Route path="admin" element={<Admin />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </CartProvider>
-    </AuthProvider>
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
+      <PayPalScriptProvider options={{ "client-id": PAYPAL_CLIENT_ID || "test", currency: "USD" }}>
+        <AuthProvider>
+          <PersonalizationProvider>
+            <CartProvider>
+              <BrowserRouter>
+                <PostHogPageView />
+                <Routes>
+                  <Route path="/" element={<Layout />}>
+                    <Route index element={<Home />} />
+                    <Route path="shop" element={<Shop />} />
+                    <Route path="collections" element={<Collections />} />
+                    <Route path="gallery" element={<Gallery />} />
+                    <Route path="admin" element={<Admin />} />
+                  </Route>
+                </Routes>
+              </BrowserRouter>
+            </CartProvider>
+          </PersonalizationProvider>
+        </AuthProvider>
+      </PayPalScriptProvider>
+    </ClerkProvider>
   );
 }
+
