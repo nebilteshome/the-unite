@@ -41,7 +41,7 @@ export default function App() {
           <div className="bg-black/5 p-4 rounded text-left text-xs mb-6 font-mono">
             <p className="mb-2 font-bold text-red-600">Troubleshooting:</p>
             <ol className="list-decimal ml-4 space-y-1">
-              <li>Go to Vercel Dashboard > Settings > Environment Variables</li>
+              <li>Go to Vercel Dashboard &gt; Settings &gt; Environment Variables</li>
               <li>Ensure the key name is exactly: <strong>VITE_CLERK_PUBLISHABLE_KEY</strong></li>
               <li>Ensure "Production" and "Preview" environments are checked</li>
               <li><strong>Crucial:</strong> You must trigger a NEW deployment (Redeploy) after saving the variables</li>
