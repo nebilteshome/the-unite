@@ -54,7 +54,10 @@ export default function Admin() {
             .from('products')
             .upload(filePath, file, { cacheControl: '3600', upsert: true });
 
-          if (uploadError) throw uploadError;
+          if (uploadError) {
+            alert(`Error uploading ${file.name}: ${uploadError.message}`);
+            throw uploadError;
+          }
 
           const { data: { publicUrl } } = supabase.storage
             .from('products')
@@ -62,7 +65,7 @@ export default function Admin() {
 
           itemsToInsert.push({
             [isVideo ? 'video_url' : 'image_url']: publicUrl,
-            title: '',
+            title: file.name.split('.')[0], // Use filename as default title
             description: ''
           });
           
@@ -74,8 +77,14 @@ export default function Admin() {
 
       if (itemsToInsert.length > 0) {
         const { error } = await supabase.from('gallery').insert(itemsToInsert);
-        if (error) alert("Error saving gallery items: " + error.message);
-        fetchAll();
+        if (error) {
+          alert("Error saving gallery items to database: " + error.message);
+          console.error("Database insert error:", error);
+        } else {
+          fetchAll();
+        }
+      } else {
+        alert("No files were successfully uploaded.");
       }
       
       setUploadProgress(null);
