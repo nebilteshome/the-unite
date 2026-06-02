@@ -30,13 +30,23 @@ function PostHogPageView() {
 
 export default function App() {
   if (!CLERK_PUBLISHABLE_KEY) {
+    console.error("VITE_CLERK_PUBLISHABLE_KEY is missing from environment variables.");
     return (
       <div className="min-h-screen flex items-center justify-center bg-brand-bg p-6 text-center">
         <div className="max-w-md">
           <h1 className="text-2xl font-extrabold uppercase tracking-tighter mb-4">Setup Required</h1>
           <p className="text-sm opacity-70 mb-6">
-            Please add your <code className="bg-black/5 px-1 rounded">VITE_CLERK_PUBLISHABLE_KEY</code> to your <code className="bg-black/5 px-1 rounded">.env.local</code> file to continue.
+            The environment variable <code className="bg-black/5 px-1 rounded font-bold">VITE_CLERK_PUBLISHABLE_KEY</code> is not set in your Vercel project settings.
           </p>
+          <div className="bg-black/5 p-4 rounded text-left text-xs mb-6 font-mono">
+            <p className="mb-2 font-bold text-red-600">Troubleshooting:</p>
+            <ol className="list-decimal ml-4 space-y-1">
+              <li>Go to Vercel Dashboard > Settings > Environment Variables</li>
+              <li>Ensure the key name is exactly: <strong>VITE_CLERK_PUBLISHABLE_KEY</strong></li>
+              <li>Ensure "Production" and "Preview" environments are checked</li>
+              <li><strong>Crucial:</strong> You must trigger a NEW deployment (Redeploy) after saving the variables</li>
+            </ol>
+          </div>
           <div className="animate-pulse flex justify-center">
             <div className="w-2 h-2 bg-black rounded-full mx-1"></div>
             <div className="w-2 h-2 bg-black rounded-full mx-1"></div>
