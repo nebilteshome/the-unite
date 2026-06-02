@@ -146,6 +146,17 @@ CREATE POLICY "Allow public read access on drops" ON public.drops FOR SELECT USI
 CREATE POLICY "Allow admin full access on drops" ON public.drops FOR ALL 
     USING (public.is_admin());
 
+-- 8.5 Storage Policies (Assuming a bucket named 'products' exists)
+-- These must be applied to storage.objects
+-- Note: You may need to create the 'products' bucket first in the Supabase Dashboard
+
+-- Allow public to read files from 'products' bucket
+CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING (bucket_id = 'products');
+
+-- Allow admins to upload/update/delete files in 'products' bucket
+CREATE POLICY "Admin Full Access" ON storage.objects FOR ALL 
+USING (bucket_id = 'products' AND public.is_admin());
+
 -- 9. Trigger to automatically create a profile on signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
