@@ -39,9 +39,15 @@ export default function Admin() {
     if (!files || files.length === 0 || !supabase) return;
 
     // Debug logging
-    const { data: { user } } = await supabase.auth.getUser();
-    console.log("Current Supabase User:", user);
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
+    
+    console.log("Current Supabase Session User:", user);
     console.log("Is Admin state:", isAdmin);
+
+    if (!user) {
+      alert("⚠️ SUPABASE AUTH ERROR: You are not properly logged into Supabase. \n\nThis usually means the Clerk JWT Template for Supabase is missing or misconfigured. \n\nI will try to upload anyway, but it may fail.");
+    }
 
     if (type === 'gallery_batch') {
       setUploadProgress({ current: 0, total: files.length });
