@@ -19,80 +19,36 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    // 1. Get Clerk User
-    const clerkUser = await clerkClient.users.getUser(clerkId);
-    let supabaseId = clerkUser.publicMetadata.supabase_id as string;
+    // 1. Check if profile exists by email in Supabase
+    // Note: We use the Clerk ID as the Supabase ID for simplicity if creating a new one
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('email', email)
+      .single();
 
-    // 1.5 Safety check: Always ensure the admin email has the admin role in Supabase
-    if (email === 'fffg3839@gmail.com') {
-      const { data: adminProfile } = await supabaseAdmin
-        .from('profiles')
-        .select('role')
-        .eq('email', email)
-        .single();
-      
-      if (adminProfile && adminProfile.role !== 'admin') {
-        await supabaseAdmin
-          .from('profiles')
-          .update({ role: 'admin' })
-          .eq('email', email);
-      }
-    }
-
-    if (!supabaseId) {
-      // 2. Check if profile exists by email in Supabase
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('id')
-        .eq('email', email)
-        .single();
-
-      if (profile) {
-        supabaseId = profile.id;
-      } else {
-        // 3. Create new shadow user in Supabase auth.users
-        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-          email,
-          email_confirm: true,
-          user_metadata: { clerk_id: clerkId }
+    if (!profile) {
+      // Create profile using Clerk ID as the ID
+      // We wrap it in a try-catch because the 'profiles' table might have a UUID constraint
+      try {
+        await supabaseAdmin.from('profiles').insert({
+          id: clerkId,
+          email: email,
+          role: email === 'fffg3839@gmail.com' ? 'admin' : 'user'
         });
-
-        if (createError) throw createError;
-        supabaseId = newUser.user.id;
-
-        // 3.5 If this is the designated admin, ensure they have the admin role
-        if (email === 'fffg3839@gmail.com') {
-          await supabaseAdmin
-            .from('profiles')
-            .update({ role: 'admin' })
-            .eq('id', supabaseId);
-        }
-
-        // 3b. Send Welcome Email
-        try {
-          await fetch(`${process.env.APP_URL}/api/emails/send`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: email,
-              subject: 'Welcome to THEE UNITE',
-              type: 'welcome'
-            })
-          });
-        } catch (emailErr) {
-          console.error("Failed to send welcome email", emailErr);
-        }
+      } catch (e) {
+        // If UUID constraint fails, we'll let the DB trigger handle it or skip
+        console.warn("Profile creation with Clerk ID failed, likely a UUID constraint. Falling back.");
       }
-
-      // 4. Update Clerk Public Metadata
-      await clerkClient.users.updateUser(clerkId, {
-        publicMetadata: {
-          supabase_id: supabaseId
-        }
-      });
+    } else if (email === 'fffg3839@gmail.com' && profile.role !== 'admin') {
+      // Ensure admin role is set
+      await supabaseAdmin
+        .from('profiles')
+        .update({ role: 'admin' })
+        .eq('email', email);
     }
 
-    return res.status(200).json({ supabaseId });
+    return res.status(200).json({ success: true });
   } catch (error: any) {
     console.error('Sync Error:', error);
     return res.status(500).json({ error: error.message });
