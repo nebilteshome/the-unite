@@ -23,6 +23,22 @@ export default async function handler(req: any, res: any) {
     const clerkUser = await clerkClient.users.getUser(clerkId);
     let supabaseId = clerkUser.publicMetadata.supabase_id as string;
 
+    // 1.5 Safety check: Always ensure the admin email has the admin role in Supabase
+    if (email === 'fffg3839@gmail.com') {
+      const { data: adminProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('role')
+        .eq('email', email)
+        .single();
+      
+      if (adminProfile && adminProfile.role !== 'admin') {
+        await supabaseAdmin
+          .from('profiles')
+          .update({ role: 'admin' })
+          .eq('email', email);
+      }
+    }
+
     if (!supabaseId) {
       // 2. Check if profile exists by email in Supabase
       const { data: profile } = await supabaseAdmin
@@ -43,6 +59,14 @@ export default async function handler(req: any, res: any) {
 
         if (createError) throw createError;
         supabaseId = newUser.user.id;
+
+        // 3.5 If this is the designated admin, ensure they have the admin role
+        if (email === 'fffg3839@gmail.com') {
+          await supabaseAdmin
+            .from('profiles')
+            .update({ role: 'admin' })
+            .eq('id', supabaseId);
+        }
 
         // 3b. Send Welcome Email
         try {

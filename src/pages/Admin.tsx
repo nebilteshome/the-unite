@@ -40,12 +40,25 @@ export default function Admin() {
 
     // Debug logging
     const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user;
+    const supabaseUser = session?.user;
     
-    console.log("Current Supabase Session User:", user);
-    console.log("Is Admin state:", isAdmin);
+    console.log("Current Supabase Session User:", supabaseUser);
+    console.log("Is Admin state (React):", isAdmin);
 
-    if (!user) {
+    if (supabaseUser) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', supabaseUser.id)
+        .single();
+      console.log("Supabase Profile Role:", profile?.role);
+      
+      if (profile?.role !== 'admin') {
+        console.warn("⚠️ DATABASE ROLE MISMATCH: Your database role is not 'admin'. Uploads will be blocked by RLS policies.");
+      }
+    }
+
+    if (!supabaseUser) {
       alert("⚠️ SUPABASE AUTH ERROR: You are not properly logged into Supabase. \n\nThis usually means the Clerk JWT Template for Supabase is missing or misconfigured. \n\nI will try to upload anyway, but it may fail.");
     }
 
@@ -66,7 +79,8 @@ export default function Admin() {
             .upload(filePath, file, { cacheControl: '3600', upsert: true });
 
           if (uploadError) {
-            alert(`Error uploading ${file.name}: ${uploadError.message}`);
+            console.error(`Error uploading ${file.name}:`, uploadError);
+            alert(`Error uploading ${file.name}: ${uploadError.message}\n\nCheck the browser console for more details.`);
             throw uploadError;
           }
 
@@ -113,7 +127,10 @@ export default function Admin() {
         .from('products')
         .upload(filePath, file, { cacheControl: '3600', upsert: true });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Supabase Storage Upload Error Details:", uploadError);
+        throw uploadError;
+      }
 
       const { data: { publicUrl } } = supabase.storage
         .from('products')
