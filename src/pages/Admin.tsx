@@ -59,7 +59,13 @@ export default function Admin() {
     }
 
     if (!supabaseUser) {
-      alert("⚠️ SUPABASE AUTH ERROR: You are not properly logged into Supabase. \n\nThis usually means the Clerk JWT Template for Supabase is missing or misconfigured. \n\nI will try to upload anyway, but it may fail.");
+      alert("⚠️ SUPABASE AUTH ERROR: You are not properly logged into Supabase. \n\n" +
+            "This means Clerk failed to provide a security token for Supabase. \n\n" +
+            "TO FIX THIS:\n" +
+            "1. Go to your Clerk Dashboard -> JWT Templates.\n" +
+            "2. Ensure you have a template named 'supabase' (all lowercase).\n" +
+            "3. If you have multiple Clerk instances (Dev/Prod), check BOTH.\n\n" +
+            "I will try to upload anyway, but it will likely fail with an RLS error.");
     }
 
     if (type === 'gallery_batch') {

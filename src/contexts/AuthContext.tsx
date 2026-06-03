@@ -58,8 +58,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsAdmin(isAuthorizedAdmin);
 
       try {
+        console.log("Starting Supabase sync for email:", email);
+        
         // Trigger Sync API to link Clerk with Supabase
-        await fetch('/api/auth/sync', {
+        const syncRes = await fetch('/api/auth/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -68,14 +70,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           })
         });
 
+        if (!syncRes.ok) {
+          const errorText = await syncRes.text();
+          console.error("Sync API failed:", syncRes.status, errorText);
+        } else {
+          console.log("Sync API successful");
+        }
+
         // 1. Get a Supabase-compatible JWT from Clerk
+        console.log("Requesting Supabase JWT from Clerk...");
         const token = await clerkSession?.getToken({ template: 'supabase' });
+        
+        if (!token) {
+          console.error("❌ FAILED TO GET SUPABASE JWT: The 'supabase' template is missing in Clerk or getToken failed.");
+        } else {
+          console.log("Successfully retrieved Supabase JWT");
+        }
 
         if (token && supabase) {
-          await supabase.auth.setSession({
+          const { error: setSessionError } = await supabase.auth.setSession({
             access_token: token,
             refresh_token: '',
           });
+
+          if (setSessionError) {
+            console.error("Error setting Supabase session:", setSessionError.message);
+          } else {
+            console.log("Supabase session set successfully. Supabase User ID:", (await supabase.auth.getUser()).data.user?.id);
+          }
 
           const { data: profile } = await supabase
             .from('profiles')
